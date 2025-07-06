@@ -1,0 +1,69 @@
+#Create KNN model on Kaggle student performance dataset
+#2/28/25 1 author
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+from sklearn.metrics import mean_absolute_error, mean_squared_error, accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+
+df = pd.read_csv('/kaggle/input/student-study-performance/study_performance.csv')
+df.head()
+
+#want to predict writing score
+Y = df['writing_score']
+X = df[['math_score']]
+
+#fit knn model
+knn_reg = KNeighborsRegressor(n_neighbors=5, metric='euclidean')
+knn_reg.fit(X,Y)
+
+#Make a prediction given score of 80 in math
+X_input = [[80]]
+Y_output = knn_reg.predict(X_input)
+print(Y_output)
+
+#Visualize original data and predicted values
+X_sorted = X.sort_values(by='math_score')
+Y_pred = knn_reg.predict(X_sorted)
+
+plt.scatter(X,Y,color='blue')
+plt.plot(X_sorted, Y_pred,color='red')
+plt.title('KNN Regression Model Fit')
+plt.xlabel('Math Score')
+plt.ylabel('Writing Score')
+plt.show()
+
+#model performance metrics
+Y_knn_pred = knn_reg.predict(X)
+
+print('Model performance Metrics of KNN regression model')
+print('Mean absolute error:', mean_absolute_error(Y,Y_knn_pred))
+print('Mean squared error:', mean_squared_error(Y,Y_knn_pred))
+print('Root mean squared error:', mean_squared_error(Y,Y_knn_pred,squared=False))
+
+#classifier model
+Y = df['gender']
+X = df[['math_score', 'reading_score', 'writing_score']]
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X,Y)
+
+X_input = [[70,80,80]]
+Y_pred = knn.predict(X)
+print(knn.predict(X_input))
+
+#accuracy for classification
+print("Accuracy = ",accuracy_score(Y,Y_pred))
+cm = confusion_matrix(Y,Y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+disp.plot()
+
+#Mean imputation of na values
+df_imputed = df.fillna({'Age':df['Age'].mean()})
+#KNN imputation
+from sklearn.imputer import KNNImputer
+cols_to_impute = df[['Age','Fare']]
+imputer = KNNImputer(n_neighbors=5)
+df_imputed = imputer.fit_transform(df_selected)
+df['Age'] = df_imputer[:,0]
