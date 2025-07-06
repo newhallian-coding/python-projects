@@ -1,6 +1,5 @@
 #Prime Finder - 5/4/24 
 #This program finds all the primes up to a user given number.
-#Pull up a python emulator and copy and paste to try it!
 
 
 def is_prime(number):               #our prime determination func
