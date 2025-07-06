@@ -1,0 +1,410 @@
+#MIT5742 Final Project - Pandas Team
+#Create stock portfolio reccomendation out of 8 possible stocks
+#Uses datasets generated from current market data
+#Creates machine learning models - XGBoost
+
+#Initialization
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+import seaborn as sns
+
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import TimeSeriesSplit
+
+#Given dataset and add fut7 variable (% difference 7 days from date)
+df_given = pd.read_csv('/kaggle/input/mit5742-sp500-stock-value-dataset/sp500_stocks.csv')
+
+#Updated stock market data, Kaggle dataset
+df_fulldata = pd.read_csv('/kaggle/input/s-and-p500-daily-update-dataset/SnP_daily_update.csv', low_memory=False)
+
+#Financial data of our companies and industries, our own dataset
+df_findata = pd.read_excel('/kaggle/input/mit5742-company-financial-data/Company Financial Data.xlsx')
+
+
+#Rearrange updated data, fix columns
+df_fulldata.rename(columns={'Price': 'Date'}, inplace=True)
+df_fulldata.drop(1, axis=0, inplace=True)
+df_fulldata.reset_index(drop=True, inplace=True)
+
+df_filtered = df_fulldata[df_fulldata['Date'] > '2020-01-01']
+df_filtered.columns=df_filtered.iloc[0]
+df_filtered=df_filtered.drop(0)
+df_filtered.rename(columns={'Ticker': 'Date'}, inplace=True)
+
+
+
+df_COST = df_filtered[['Date','COST']]
+df_COST = df_COST.iloc[:,:2]
+df_COST['COST']= pd.to_numeric(df_COST['COST'])
+df_COST['Date']= pd.to_datetime(df_COST['Date'])
+df_COST.rename(columns={'COST': 'Price'}, inplace=True)
+df_DIS = df_filtered[['Date','DIS']]
+df_DIS = df_DIS.iloc[:,:2]
+df_DIS['DIS']= pd.to_numeric(df_DIS['DIS'])
+df_DIS['Date']= pd.to_datetime(df_DIS['Date'])
+df_DIS.rename(columns={'DIS': 'Price'}, inplace=True)
+df_UBER = df_filtered[['Date','UBER']]
+df_UBER = df_UBER.iloc[:,:2]
+df_UBER['UBER']= pd.to_numeric(df_UBER['UBER'])
+df_UBER['Date']= pd.to_datetime(df_UBER['Date'])
+df_UBER.rename(columns={'UBER': 'Price'}, inplace=True)
+df_MAR = df_filtered[['Date','MAR']]
+df_MAR = df_MAR.iloc[:,:2]
+df_MAR['MAR']= pd.to_numeric(df_MAR['MAR'])
+df_MAR['Date']= pd.to_datetime(df_MAR['Date'])
+df_MAR.rename(columns={'MAR': 'Price'}, inplace=True)
+df_TGT = df_filtered[['Date','TGT']]
+df_TGT = df_TGT.iloc[:,:2]
+df_TGT['TGT']= pd.to_numeric(df_TGT['TGT'])
+df_TGT['Date']= pd.to_datetime(df_TGT['Date'])
+df_TGT.rename(columns={'TGT': 'Price'}, inplace=True)
+df_F = df_filtered[['Date','F']]
+df_F = df_F.iloc[:,:2]
+df_F['F']= pd.to_numeric(df_F['F'])
+df_F['Date']= pd.to_datetime(df_F['Date'])
+df_F.rename(columns={'F': 'Price'}, inplace=True)
+df_EIX = df_filtered[['Date','EIX']]
+df_EIX = df_EIX.iloc[:,:2]
+df_EIX['EIX']= pd.to_numeric(df_EIX['EIX'])
+df_EIX['Date']= pd.to_datetime(df_EIX['Date'])
+df_EIX.rename(columns={'EIX': 'Price'}, inplace=True)
+df_BBY = df_filtered[['Date','BBY']]
+df_BBY = df_BBY.iloc[:,:2]
+df_BBY['BBY']= pd.to_numeric(df_BBY['BBY'])
+df_BBY['Date']= pd.to_datetime(df_BBY['Date'])
+df_BBY.rename(columns={'BBY': 'Price'}, inplace=True)
+
+
+
+# Plot the stock price changes
+plt.figure(figsize=(15, 8))
+plt.plot(df_COST['Date'], df_COST['Price'], label='COST')
+plt.plot(df_DIS['Date'], df_DIS['Price'], label='DIS')
+plt.plot(df_UBER['Date'], df_UBER['Price'], label='UBER')
+plt.plot(df_MAR['Date'], df_MAR['Price'], label='MAR')
+plt.plot(df_TGT['Date'], df_TGT['Price'], label='TGT')
+plt.plot(df_F['Date'], df_F['Price'], label='F')
+plt.plot(df_EIX['Date'], df_EIX['Price'], label='EIX')
+plt.plot(df_BBY['Date'], df_BBY['Price'], label='BBY')
+
+# Add titles and labels
+plt.title('Stock Prices Over Time')
+plt.xlabel('Date')
+plt.ylabel('Stock Value')
+plt.legend()
+plt.show()
+
+
+
+#See how stocks are correlated with each other
+stock_dfs = {'COST': df_COST, 'DIS': df_DIS, 'UBER': df_UBER, 'MAR': df_MAR, 'TGT': df_TGT, 'F': df_F, 'EIX': df_EIX, 'BBY': df_BBY}
+merged_df = pd.concat([df.set_index('Date')['Price'].rename(name) for name, df in stock_dfs.items()], axis=1)
+
+corr_matrix = merged_df.corr()
+plt.figure(figsize=(8, 6))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
+plt.title("Stock Price Correlation Heatmap")
+plt.show()
+
+
+
+# Filter data for stock tickers to make df for each company
+df_given = df_given.sort_values(by=['Symbol', 'Date'])
+df_given['fut7'] = df_given.groupby('Symbol')['Adj Close'].shift(-7).sub(df_given['Adj Close']).div(df_given['Adj Close'])
+
+df_COST_orig = df_given[df_given['Symbol'] == 'COST']
+df_DIS_orig = df_given[df_given['Symbol'] == 'DIS']
+df_UBER_orig = df_given[df_given['Symbol'] == 'UBER']
+df_MAR_orig = df_given[df_given['Symbol'] == 'MAR']
+df_TGT_orig = df_given[df_given['Symbol'] == 'TGT']
+df_F_orig = df_given[df_given['Symbol'] == 'F']
+df_EIX_orig = df_given[df_given['Symbol'] == 'EIX']
+df_BBY_orig = df_given[df_given['Symbol'] == 'BBY']
+
+
+
+#Remove all columns except for specified
+def select_columns(df):
+    return df[['Date', 'Adj Close', 'Volume', 'fut7']]
+
+df_COST = select_columns(df_COST_orig)
+df_DIS = select_columns(df_DIS_orig)
+df_UBER = select_columns(df_UBER_orig)
+df_MAR = select_columns(df_MAR_orig)
+df_TGT = select_columns(df_TGT_orig)
+df_F = select_columns(df_F_orig)
+df_EIX = select_columns(df_EIX_orig)
+df_BBY = select_columns(df_BBY_orig)
+
+
+
+#Remove uneeded dates (Covid years)
+def filter_date(df):
+    return df[df['Date'] > '2021-12-01'].iloc[:-7]
+
+df_COST = filter_date(df_COST)
+df_DIS = filter_date(df_DIS)
+df_UBER = filter_date(df_UBER)
+df_MAR = filter_date(df_MAR)
+df_TGT = filter_date(df_TGT)
+df_F = filter_date(df_F)
+df_EIX = filter_date(df_EIX)
+df_BBY = filter_date(df_BBY)
+
+
+
+#Ddd new columns that represent % change of stock price in past 1 day, 7 days, and 30 days
+def add_percentage_changes(df):
+    df['pct_change_1d'] = df['Adj Close'].pct_change() * 100
+    df['pct_change_7d'] = df['Adj Close'].pct_change(periods=7) * 100
+    df['pct_change_75d'] = df['Adj Close'].pct_change(periods=75) * 100
+    return df.iloc[31:]
+
+df_COST = add_percentage_changes(df_COST)
+df_DIS = add_percentage_changes(df_DIS)
+df_UBER = add_percentage_changes(df_UBER)
+df_MAR = add_percentage_changes(df_MAR)
+df_TGT = add_percentage_changes(df_TGT)
+df_F = add_percentage_changes(df_F)
+df_EIX = add_percentage_changes(df_EIX)
+df_BBY = add_percentage_changes(df_BBY)
+
+
+
+#Change stock close price to be moving average over 7 days (smoothes data)
+def moving_average(df, window=7):
+    df['Adj Close'] = df['Adj Close'].rolling(window=window, min_periods=1).mean()
+    return df
+
+df_COST = moving_average(df_COST)
+df_DIS = moving_average(df_DIS)
+df_UBER = moving_average(df_UBER)
+df_MAR = moving_average(df_MAR)
+df_TGT = moving_average(df_TGT)
+df_F = moving_average(df_F)
+df_EIX = moving_average(df_EIX)
+df_BBY = moving_average(df_BBY)
+
+
+
+#Finds the 7 day percent change for each day of all companies in S&P 500
+def calculate_14d_pct_change(df):
+    df_filtered = df[df['Date'] > '2022-01-05'][['Date', 'Adj Close', 'Symbol']]
+    df_filtered = df_filtered.sort_values(by=['Symbol', 'Date'])
+    df_filtered['pct_change_14d'] = df_filtered.groupby('Symbol')['Adj Close'].pct_change(periods=14, fill_method=None) * 100
+    df_filtered = df_filtered.dropna(subset=['pct_change_14d'])
+    return df_filtered
+
+df_spchange = calculate_14d_pct_change(df_given)
+
+#averages all companies % change
+def average_daily_pct_change(df):
+    avg_pct_change_df = df.groupby('Date')['pct_change_14d'].mean().reset_index()
+    avg_pct_change_df.rename(columns={'pct_change_14d': 'avg_pct_change_14d'}, inplace=True)
+    return avg_pct_change_df
+
+df_spchange = average_daily_pct_change(df_spchange)
+
+#add this information to our datasets
+df_COST['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_DIS['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_UBER['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_MAR['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_TGT['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_F['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_EIX['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+df_BBY['s&p_14d_change'] = df_spchange['avg_pct_change_14d'].values
+
+
+
+#Graph S&P performance over time
+df_sp = df_given[df_given['Date'] > '2022-01-05'][['Date', 'Adj Close', 'Symbol']]
+df_sp = df_sp.sort_values(by=['Symbol', 'Date'])
+df_sp = df_sp.groupby('Date')['Adj Close'].mean().reset_index()
+df_sp['Date']= pd.to_datetime(df_sp['Date'])
+plt.figure(figsize=(12, 6))
+sns.lineplot(data=df_sp, x="Date", y="Adj Close")
+plt.xlabel("Date")
+plt.ylabel("Average Price")
+plt.title("Price of S&P 500 Over Time")
+plt.xticks(rotation=45)
+plt.show()
+
+
+
+
+# Calculate 7-day percent change for selected tickers to find industry movements
+def calculate_21d_pct_change(df, tickers):
+    df_filtered = df[(df['Symbol'].isin(tickers)) & (df['Date'] > '2022-01-05')][['Date', 'Adj Close', 'Symbol']]
+    df_filtered = df_filtered.sort_values(by=['Symbol', 'Date'])
+    df_filtered['pct_change_21d'] = df_filtered.groupby('Symbol')['Adj Close'].pct_change(periods=21, fill_method=None) * 100
+    return df_filtered
+
+ticker_list = ['WMT', 'KR', 'AMZN', 'ROST', 'LOW', 'CVS', 'WBA', 'DG']
+df_indchange_retail = calculate_21d_pct_change(df_given, ticker_list)
+ticker_list = ['WBD', 'CMCSA', 'PARA', 'FOX']
+df_indchange_entertainment = calculate_21d_pct_change(df_given, ticker_list)
+ticker_list = ['HLT', 'HST']
+df_indchange_hotel = calculate_21d_pct_change(df_given, ticker_list)
+ticker_list = ['TSLA', 'BWA', 'GM']
+df_indchange_auto = calculate_21d_pct_change(df_given, ticker_list)
+ticker_list = ['ETR', 'PPL', 'FE', 'ES', 'PNW']
+df_indchange_energy = calculate_21d_pct_change(df_given, ticker_list)
+
+# Average all selected companies' 7-day percent change for each date
+def average_daily_pct_change(df):
+    avg_pct_change_df = df.groupby('Date')['pct_change_21d'].mean().reset_index()
+    avg_pct_change_df.rename(columns={'pct_change_21d': 'avg_pct_change_21d'}, inplace=True)
+    return avg_pct_change_df
+
+df_indchange_retail = average_daily_pct_change(df_indchange_retail)[7:-7]
+df_indchange_entertainment = average_daily_pct_change(df_indchange_entertainment)[7:-7]
+df_indchange_hotel = average_daily_pct_change(df_indchange_hotel)[7:-7]
+df_indchange_auto = average_daily_pct_change(df_indchange_auto)[7:-7]
+df_indchange_energy = average_daily_pct_change(df_indchange_energy)[7:-7]
+
+# Add info to dataframes
+df_COST['ind_21d_change'] = df_indchange_retail['avg_pct_change_21d'].values
+df_DIS['ind_21d_change'] = df_indchange_entertainment['avg_pct_change_21d'].values
+df_MAR['ind_21d_change'] = df_indchange_hotel['avg_pct_change_21d'].values
+df_TGT['ind_21d_change'] = df_indchange_retail['avg_pct_change_21d'].values
+df_F['ind_21d_change'] = df_indchange_auto['avg_pct_change_21d'].values
+df_EIX['ind_21d_change'] = df_indchange_energy['avg_pct_change_21d'].values
+df_BBY['ind_21d_change'] = df_indchange_retail['avg_pct_change_21d'].values
+
+
+
+
+#Find financial data of company and add to dataframes
+def merge_financial_data(df_target, df_findata, ticker, columns_to_add):
+    df_filtered = df_findata[df_findata["ticker"] == ticker][["date"] + columns_to_add]
+    df_target = df_target.rename(columns={"Date": "date"})
+    df_target["date"] = pd.to_datetime(df_target["date"])
+    df_findata["date"] = pd.to_datetime(df_findata["date"])
+    df_merged = df_target.merge(df_filtered, on="date", how="left")
+    return df_merged
+
+df_COST = merge_financial_data(df_COST, df_findata, ticker='COST', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_DIS = merge_financial_data(df_DIS, df_findata, ticker='DIS', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_MAR = merge_financial_data(df_MAR, df_findata, ticker='MAR', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_TGT = merge_financial_data(df_TGT, df_findata, ticker='TGT', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_F = merge_financial_data(df_F, df_findata, ticker='F', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_EIX = merge_financial_data(df_EIX, df_findata, ticker='EIX', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_BBY = merge_financial_data(df_BBY, df_findata, ticker='BBY', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+df_UBER = merge_financial_data(df_UBER, df_findata, ticker='UBER', columns_to_add=['roa', 'roe', 'gross_margin', 'op_margin', 'eps', 'net_income.1', 'google_trends'])
+
+
+
+#The cleaned dfs to be sent to model, with uneeded columns dropped to optimize accuracy performance.
+df_COST_clean = df_COST.drop(columns=["date"]).dropna().drop(df_COST.columns[[2]], axis=1)
+df_DIS_clean = df_DIS.drop(columns=["date"]).dropna().drop(df_DIS.columns[[2]], axis=1)
+df_MAR_clean = df_MAR.drop(columns=["date"]).dropna().drop(df_MAR.columns[[6]], axis=1)
+df_TGT_clean = df_TGT.drop(columns=["date"]).dropna().drop(df_TGT.columns[[2]], axis=1)
+df_F_clean = df_F.drop(columns=["date"]).dropna().drop(df_F.columns[[2]], axis=1)
+df_EIX_clean = df_EIX.drop(columns=["date"]).dropna().drop(df_EIX.columns[[2]], axis=1)
+df_BBY_clean = df_BBY.drop(columns=["date"]).dropna().drop(df_BBY.columns[[2]], axis=1)
+df_UBER_clean = df_UBER.drop(columns=["date"]).dropna().drop(df_UBER.columns[[2]], axis=1)
+
+
+
+# Create function that makes XGBoost model with cross-validation
+def train_xgb_model(df, num_boost_round=100, nfold=5, random_state=42):
+    X = df.drop(columns=['fut7'])
+    y = df['fut7']
+    
+    dtrain = xgb.DMatrix(X, label=y)
+    params = {'objective': 'reg:squarederror','eval_metric': 'rmse','random_state': random_state,}
+    
+    cv_results = xgb.cv(params=params,dtrain=dtrain,num_boost_round=num_boost_round,nfold=nfold,early_stopping_rounds=10,seed=random_state)
+    best_rmse = cv_results['test-rmse-mean'].min()
+    best_num_boost_round = cv_results['test-rmse-mean'].idxmin()
+    final_model = xgb.XGBRegressor(objective='reg:squarederror',n_estimators=best_num_boost_round,random_state=random_state)
+    final_model.fit(X, y)
+    return final_model, best_rmse
+
+
+
+    #Train model with clean datasets and find accuracy
+model_COST, rmse_train = train_xgb_model(df_COST_clean)
+print(f"Average Training RMSE for COST dataset: {rmse_train}")
+model_DIS, rmse_train = train_xgb_model(df_DIS_clean)
+print(f"Average Training RMSE for DIS dataset: {rmse_train}")
+model_MAR, rmse_train = train_xgb_model(df_MAR_clean)
+print(f"Average Training RMSE for MAR dataset: {rmse_train}")
+model_TGT, rmse_train = train_xgb_model(df_TGT_clean)
+print(f"Average Training RMSE for TGT dataset: {rmse_train}")
+model_F, rmse_train = train_xgb_model(df_F_clean)
+print(f"Average Training RMSE for F dataset: {rmse_train}")
+model_EIX, rmse_train = train_xgb_model(df_EIX_clean)
+print(f"Average Training RMSE for EIX dataset: {rmse_train}")
+model_BBY, rmse_train = train_xgb_model(df_BBY_clean)
+print(f"Average Training RMSE for BBY dataset: {rmse_train}")
+model_UBER, rmse_train = train_xgb_model(df_UBER_clean)
+print(f"Average Training RMSE for UBER dataset: {rmse_train}")
+
+
+
+#Make prediction for 7 day return for each company
+#input data is in form of Adj Close 	Volume 	pct_change_1d 	pct_change_7d 	pct_change_30d 	s&p_7d_change 	ind_7d_change 	roa 	roe 	gross_margin 	op_margin 	eps 	net_income.1 	google_trends
+pred_COST = model_COST.predict(np.array([1036.87,-0.0998,-0.0181,0.0802,-0.04377,-0.0159,0.0245,0.0735,0.12939,0.03533,4.040,0.061,79.0]).reshape(1, -1))[0]
+pred_DIS = model_DIS.predict(np.array([109.01,-0.0335,-0.0139,-0.0216,-0.04377,0.02527,0.0023,0.0044,0.3696,0.12612,0.25,-0.826797,20.0]).reshape(1, -1))[0]
+pred_MAR = model_MAR.predict(np.array([2390100,-0.0249,-0.0223,-0.0281,-0.04377,-0.03955,0.0146,0.0589,0.2891,0.047447,1.58,1.27273,64.0]).reshape(1, -1))[0]
+pred_TGT = model_TGT.predict(np.array([117.14,-0.03,-0.0875,-0.1041,-0.04377,-0.0159,0.0146,0.0589,0.2891,0.04945,1.85,-0.181068,34.0]).reshape(1, -1))[0]
+pred_F = model_F.predict(np.array([9.12,-0.0288,-0.0329,-0.0340,-0.04377,-0.0872,0.0064,0.0407,0.0886,0.01949,0.45,5.704148,34.0]).reshape(1, -1))[0]
+pred_EIX = model_EIX.predict(np.array([54.82,-0.0081,0.0485,-0.4066,-0.04377,0.0145,0.0061,0.0285,0.3763,0.21169,1.32,-2.072327,27.0]).reshape(1, -1))[0]
+pred_BBY = model_BBY.predict(np.array([75.2,-0.133,-0.1980,-0.1330,-0.04377,-0.0159,0.016,0.0886,0.2347,0.03663,1.26,-0.320163,31.0]).reshape(1, -1))[0]
+pred_UBER = model_UBER.predict(np.array([75.26,0.011,0.0041,0.2,-0.04377,0.1343,0.3062,0.3384,0.06439,3.23,-1.367987,46.0]).reshape(1, -1))[0]
+
+expected_returns = (pred_COST, pred_DIS, pred_MAR, pred_TGT, pred_F, pred_EIX, pred_BBY, pred_UBER)
+print(expected_returns)
+
+
+
+# Compute covariance matrix
+company_dfs = [df_COST_clean, df_DIS_clean, df_MAR_clean, df_TGT_clean, df_F_clean, df_EIX_clean, df_BBY_clean, df_UBER_clean]
+adj_close_data = pd.concat([df['Adj Close'] for df in company_dfs], axis=1)
+returns_data = adj_close_data.pct_change().dropna()
+covariance_matrix = returns_data.cov().values
+
+
+
+# Portfolio functions
+def calculate_portfolio_return(weights, expected_returns):
+    return np.dot(weights, expected_returns)
+
+def calculate_portfolio_volatility(weights, covariance_matrix):
+    return np.sqrt(np.dot(weights.T, np.dot(covariance_matrix, weights)))
+
+def sharpe_ratio(weights, expected_returns, covariance_matrix, risk_free_rate):
+    weights = np.array(weights)
+    portfolio_return = calculate_portfolio_return(weights, expected_returns)
+    portfolio_volatility = calculate_portfolio_volatility(weights, covariance_matrix)
+    return -(portfolio_return - risk_free_rate) / portfolio_volatility
+
+
+
+
+# Optimization function
+def optimize_portfolio(expected_returns, covariance_matrix, risk_free_rate):
+    num_assets = len(expected_returns)
+    initial_weights = np.ones(num_assets) / num_assets
+    bounds = [(0.0,1) for _ in range(num_assets)]
+    constraints = ({'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1})
+    
+    result = minimize(sharpe_ratio, initial_weights, args=(expected_returns, covariance_matrix, risk_free_rate),
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+    
+    return result.x if result.success else None
+
+
+
+# Find investment weight recommendation
+one_year_bond = 0.0404
+risk_free_rate = (1 + one_year_bond) ** (1/52) - 1
+optimal_weights = optimize_portfolio(expected_returns, covariance_matrix, risk_free_rate)
+print("Optimal Portfolio Weights:", [f"{w:.3f}" for w in optimal_weights])
