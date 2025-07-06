@@ -1,0 +1,367 @@
+#Purdue assignment 12.1 - Battleship
+#7/6/23 1 author
+#Create a game of battleship to run directly within the terminal, text based
+
+def welcome_func():     #Prints formatted welcome text
+    title = "\n               ~ Welcome to Battleship! ~               "
+    opening = "\nChatGPT has gone rogue and commandeered a space strike\nfleet. It's on a mission to take over the world.  We've\nlocated the stolen ships, but we need your superior\nintelligence to help us destroy them before it's too\nlate.\n"
+    print(title)
+    print(opening)
+
+
+def menu_func():    #gives menu and calls funcs depending on option selected
+    global check_quit
+    menu_choice = '0'
+
+    while check_quit == 0 and menu_choice != '3':   #loops until quit or new game
+        menu_text = 'Menu:\n  1 : Instructions\n  2 : View Example Map\n  3 : New Game\n  4 : Hall of Fame\n  5 : Quit'
+        print(menu_text)
+        menu_choice = input('What would you like to do? ')
+
+        if menu_choice == '5':  #chooses depending upon option chosen
+            check_quit += 1
+        elif menu_choice == '1':
+            inst_txt = '\nInstructions:\n\nShips are positioned at fixed locations in a 10-by-10 grid.  The rows of the grid are labeled A through J, and the columns are labeled 0 through 9.  Use menu option "2" to see an example.  Target the ships by entering the row and column of the location you wish to shoot.  A ship is destroyed when all of the spaces it fills have been hit.  Try to destroy the fleet with as few shots as possible.  The fleet consists of the following 5 ships:\n'
+            ship_list = 'Size : Type\n   5 : Mothership\n   4 : Battleship\n   3 : Destroyer\n   3 : Stealth Ship\n   2 : Patrol Ship\n'
+            print(inst_txt)
+            print(ship_list)
+        elif menu_choice == '2':    #prints out map
+            ex_map = make_grid()
+            header = '   0  1  2  3  4  5  6  7  8  9'
+            alpha_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+            print("\n",end="")
+            print(header,end="")
+            for c in range(10):
+                print('\n',end="")
+                print(alpha_list[c], end="")
+                for d in range(10):
+                    print("  ",end="")
+                    print(ex_map[c][d],end="")
+            print('\n\n')
+        elif menu_choice == '3':
+            break
+        elif menu_choice == '4':
+            print('\n')
+            show_hall()
+            print('\n')
+        else:
+            invalid_text = '\nInvalid selection.  Please choose a number from the menu.\n'
+            print(invalid_text)
+
+def make_grid():    #creates 10 by 10 grid with ships on
+    x = 0
+    sea_array = ['~']*10    #creates empty grid
+    grid = [[]]*10
+    for i in range(10):
+        grid[i] = grid[i] + sea_array
+
+    row = r.randint(0,7)    #randomly chooses position
+    col = r.randint(1,8)
+    grid[row][col] = grid[row+1][col-1] = grid[row+1][col] = grid[row+1][col+1] = grid[row+2][col] = 'M'    #places down characters
+
+    while x == 0:       #puts down patrol boat
+        orientation = r.randint(1,2)
+        row = r.randint(0,9)
+        col = r.randint(0,8)
+        if orientation == 2:
+            temp = row
+            row = col
+            col = temp
+            if grid[row][col] != 'M' and grid[row+1][col] != 'M':
+                grid[row][col] = grid[row+1][col] = 'P'
+                x += 1
+        elif grid[row][col] == grid[row][col+1] != 'M':
+            grid[row][col] = grid[row][col+1] = 'P'
+            x += 1
+        
+    x = 0
+    while x == 0:       #puts down battleship
+        row = r.randint(0,8)
+        col = r.randint(0,8)
+        if grid[row][col] == grid[row+1][col] == grid[row+1][col+1] == grid[row][col+1] == '~':
+            grid[row][col] = grid[row+1][col] = grid[row+1][col+1] = grid[row][col+1] = 'B'
+            x += 1
+
+    x = 0
+    while x == 0:       #puts down stealth ship
+        orientation = r.randint(1,2)
+        row = r.randint(0,9)
+        col = r.randint(0,7)
+        if grid[row][col] == grid[row][col+1] == grid[row][col+2] == '~' and orientation == 1:
+            grid[row][col] = grid[row][col+1] = grid[row][col+2] = 'S'
+            x += 1
+        if orientation == 2:
+            temp = row
+            row = col
+            col = temp
+            if grid[row][col] == grid[row+1][col] == grid[row+2][col] == '~':
+                grid[row][col] = grid[row+1][col] = grid[row+2][col] = 'S'
+                x += 1
+
+    x = 0
+    while x == 0:   #puts down destroyer
+        orientation = r.randint(1,4)
+        row = r.randint(0,8)
+        col = r.randint(0,8)
+        if orientation == 1 and grid[row][col] == grid[row+1][col] == grid[row][col+1] == '~':
+            grid[row][col] = grid[row+1][col] = grid[row][col+1] = 'D'
+            x += 1
+        elif orientation == 2 and grid[row][col] == grid[row+1][col] == grid[row+1][col+1] == '~':
+            grid[row][col] = grid[row+1][col] = grid[row+1][col+1] = 'D'
+            x += 1
+        elif orientation == 3 and grid[row][col] == grid[row][col+1] == grid[row+1][col+1] == '~':
+            grid[row][col] = grid[row][col+1] = grid[row+1][col+1] = 'D'
+            x += 1
+        elif orientation == 4 and grid[row+1][col+1] == grid[row+1][col] == grid[row][col+1] == '~':
+            grid[row+1][col+1] = grid[row+1][col] = grid[row][col+1] = 'D'
+            x += 1
+    return grid
+
+
+def show_hall():    #displays the hall of fame
+    title = ' Hall of Fame '
+    title = title.center(30,'~')
+    labels = 'Rank : Accuracy :  Player Name'
+    seperator = ['~'] * 30
+    print(title)
+    print(labels)
+    for i in range(len(seperator)):
+        print(seperator[i],end="")
+    print("\n",end="")
+
+    f = open('battleship_hof.txt','r')
+    text = f.read()
+    player_num = text.count('\n') - 1
+
+    if player_num != 0: #formats and calculates what to display
+        elements = text.replace('\n',',').split(',')
+        for i in range(player_num):
+            accuracy = int(elements[i*3+4]) / ((int(elements[i*3+4]) + int(elements[i*3+5])) / 100)
+            name = elements[i*3+3]
+            rank = i + 1
+            print(f'{rank:>4}{accuracy:>10.2f}%{name:>15}')
+    
+    for i in range(len(seperator)):
+        print(seperator[i],end="")
+    f.close()
+
+
+def make_active_grid():     #creates the map player will be seeing
+    sea_array = ['~']*11
+    grid = [[]]*11
+    num_array = [' ','0','1','2','3','4','5','6','7','8','9']
+    alph_array = ['A','B','C','D','E','F','G','H','I','J']
+    grid[0] = num_array
+    
+    for i in range(10):
+        sea_array[0] = alph_array[i]
+        grid[i+1] = grid[i+1] + sea_array
+    return(grid)
+
+
+def show_map(map):      #displays the active map
+    for a in range(11):
+        print('\n',end="")
+        for b in range(11): 
+            print(map[a][b],end="")
+            if b != 10:
+                print('  ',end="")
+
+
+def get_shot():     #gets user input and converts to x,y coords
+    check2_quit = 0
+    valid = 0
+    shot = [0,0]
+    invalid_1 = 'Please enter exactly two characters.'
+    invalid_2 = 'Please enter a location in the form "G6".'
+    alph_array = ['A','B','C','D','E','F','G','H','I','J','a','b','c','d','e','f','g','h','i','j']
+    num_array = ['0','1','2','3','4','5','6','7','8','9']
+    print('\n')
+
+    while check_quit == 0 and valid == 0:
+        user_input = input("Where should we target next (q to quit)? ")
+        if user_input == 'q' or user_input == 'Q':
+            check2_quit += 1
+            shot = [-1,-1]
+            break
+        elif len(user_input) != 2:
+            print(invalid_1)
+        elif user_input[0] in alph_array and user_input[1] in num_array:    #creates x,y coords
+            if user_input[0] == 'A' or user_input[0] == 'a':
+                shot[0] = 0
+            elif user_input[0] == 'B' or user_input[0] == 'b':
+                shot[0] = 1
+            elif user_input[0] == 'C' or user_input[0] == 'c':
+                shot[0] = 2
+            elif user_input[0] == 'D' or user_input[0] == 'd':
+                shot[0] = 3
+            elif user_input[0] == 'E' or user_input[0] == 'e':
+                shot[0] = 4
+            elif user_input[0] == 'F' or user_input[0] == 'f':
+                shot[0] = 5
+            elif user_input[0] == 'G' or user_input[0] == 'g':
+                shot[0] = 6
+            elif user_input[0] == 'H' or user_input[0] == 'h':
+                shot[0] = 7
+            elif user_input[0] == 'I' or user_input[0] == 'i':
+                shot[0] = 8
+            else:
+                shot[0] = 9
+            shot[1] = int(user_input[1]) - 1
+            valid += 1
+        else:
+            print(invalid_2)
+    return shot
+
+
+def is_hit_func(shot, map, act_map):        #determines if shot missed, hit, or was a repeat
+    is_hit = [0,0]
+    if act_map[shot[0]+1][shot[1]+2] != '~':
+        is_hit = [0,1]
+    elif map[shot[0]][shot[1]+1] == '~':
+        is_hit = [0,0]
+    else:
+        is_hit[1] = 2
+        if map[shot[0]][shot[1]+1] == 'M':
+            is_hit[0] = 0
+        elif map[shot[0]][shot[1]+1] == 'P':
+            is_hit[0] = 1
+        elif map[shot[0]][shot[1]+1] == 'B':
+            is_hit[0] = 2
+        elif map[shot[0]][shot[1]+1] == 'S':
+            is_hit[0] = 3
+        elif map[shot[0]][shot[1]+1] == 'D':
+            is_hit[0] = 4
+    return is_hit
+
+
+def ship_dest_func(health):     #checks to see if ship has been sunk
+    state_1 = "The enemy's"
+    state_2 = "has been destroyed."
+    ship_list = ['Mothership', 'Patrol Ship', 'Battleship', 'Stealth Ship', 'Destroyer']
+
+    if health[0] == 0:
+        health[0] -= 1
+        print(state_1, ship_list[0], state_2)
+    elif health[1] == 0:
+        health[1] -= 1
+        print(state_1, ship_list[1], state_2)
+    elif health[2] == 0:
+        health[2] -= 1
+        print(state_1, ship_list[2], state_2)
+    elif health[3] == 0:
+        health[3] -= 1
+        print(state_1, ship_list[3], state_2)
+    elif health[4] == 0:
+        health[4] -= 1
+        print(state_1, ship_list[4], state_2)
+    return health
+
+
+def congrats_func(shots, hits):     #gives win messages and edits hof file
+    placement = 0
+    misses = str(shots - hits)
+    user_accuracy = hits / shots * 100
+    hits = str(hits)
+    win_text = "\nYou've destroyed the enemy fleet!\nHumanity has been saved from the threat of AI.\n\nFor now ...\n"
+    print(win_text)
+    
+    f = open('battleship_hof.txt','r')
+    text = f.read()
+    player_num = text.count('\n') - 1
+    elements = text.replace('\n',',').split(',')
+    hof_accuracy = [0]*player_num
+    for i in range(player_num):
+        hof_accuracy[i] = int(elements[i*3+4]) / ((int(elements[i*3+4]) + int(elements[i*3+5])) / 100)
+        if user_accuracy >= hof_accuracy[i]:
+            placement = i - 1
+
+    if player_num == 0:
+        print(f'Congratulations, you have achieved a targeting accuracy\nof {user_accuracy:.2f}% and earned a spot in the Hall of Fame.')
+        name = input('Enter your name: ')
+        print('\n',end="")
+        new_entry = 'name,hits,misses\n' + name + ',' + hits + ',' + misses
+        with open('battleship_hof.txt','w') as f:
+            f.write(new_entry)
+            f.write('\n')
+        print('\n',end="")
+        show_hall()
+    elif placement < 10:
+        print(f'Congratulations, you have achieved a targeting accuracy\nof {user_accuracy:.2f}% and earned a spot in the Hall of Fame.')
+        name = input('Enter your name: ')
+        print('\n',end="")
+        new_entry = name + ',' + hits + ',' + misses
+        lines = text.split('\n')
+        lines.insert(placement,new_entry)
+        player_num = len(lines) - 2
+        del lines[-1]
+        if player_num == 11:
+            del lines[11]
+        with open('battleship_hof.txt','w') as f:
+            for i in range(len(lines)):
+                f.write(lines[i])
+                f.write('\n')
+        print('\n',end="")
+        show_hall()
+    else:
+        print(f'Your targeting accuracy was {user_accuracy:.2f}%.')
+
+    print('\n')
+    f.close()
+
+
+def main():     #mainline logic
+    global check_quit       #initialize
+    check_quit = 0
+    map, act_map, user_shot, is_hit = [[]]*10, [[]]*11, [0,0], [0,0]
+
+    welcome_func()
+
+    while check_quit == 0:      #loops program until player quits
+        check2_quit = 0
+        while check2_quit == 0:
+            shot_count, hit_count = 0, 0    #initialize
+            ship_health = [5,2,4,3,3]
+
+            menu_func()     #starts with menu and initialize
+            if check_quit != 0:
+                break
+            map = make_grid()
+            act_map = make_active_grid()
+
+            while ship_health != [-1, -1, -1, -1, -1] and check_quit  == 0:     #loops until ships are sank or game is quit
+                show_map(act_map)
+                user_shot = get_shot()
+                if user_shot == [-1,-1]:
+                    print('\n',end="")
+                    check2_quit += 1
+                    break
+                shot_count += 1
+                is_hit = is_hit_func(user_shot, map, act_map)
+
+                if is_hit[1] == 0:      #gives result of shot
+                    act_map[user_shot[0]+1][user_shot[1]+2] = 'o'
+                    miss_state = '\nmiss'
+                    print(miss_state)
+                elif is_hit[1] == 1:
+                    repeat_state = "\nYou've already targeted that location"
+                    print(repeat_state)
+                else:
+                    hit_count += 1
+                    ship_health[is_hit[0]] -= 1
+                    hit_state = "\nIT'S A HIT!"
+                    print(hit_state)
+                    act_map[user_shot[0]+1][user_shot[1]+2] = 'x'  
+                ship_health = ship_dest_func(ship_health)
+        
+            if check_quit != 0:
+                break
+
+            if ship_health == [-1, -1, -1, -1, -1]:
+                congrats_func(shot_count, hit_count)    #once game is won, starts congrats
+
+    print('\nGoodbye\n')
+
+
+if __name__ == "__main__":
+    main()
