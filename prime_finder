@@ -1,0 +1,35 @@
+#Prime Finder - 5/4/24 
+#This program finds all the primes up to a user given number.
+#Pull up a python emulator and copy and paste to try it!
+
+
+def is_prime(number):               #our prime determination func
+    if number == 0 or number == 1:  #If checks for edge cases that won't fit in for loop
+        result = False
+    else:
+        result = True            #initializes our result for if we don't find a factor
+        for i in range(2,int((number/2)+1),1):  #loops until half of given value
+            if number % i == 0:         #modulus will determine if factor exists
+                result = False
+                break
+    return(result)
+
+def main():
+    number = int(input("Enter a positive integer: "))   #ask for input
+    print(f"The primes up to {number} are: ",end="")    #initialize print and variables
+    a = 0
+    prime_array = [0] * (number+1)
+
+    for i in range(2,number+1,1):   #loops through numbers up to given
+        primeness = is_prime(i)     #calls func
+        if primeness == True:
+            prime_array[a] = i      #stores if prime
+            a += 1
+
+    for i in range(a-1):            #loops through to print array
+        print(f"{prime_array[i]}, ",end="")
+    print(f"{prime_array[a-1]}")    #prints final element without "," and with \n
+
+"""Do not change anything below this line."""
+if __name__ == "__main__":
+    main()
