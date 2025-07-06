@@ -1,0 +1,156 @@
+#Alex Newhall, MIT5742, HW2
+#2/10/25 1 author
+#Exploratory data analysis of Kaggle Titanic dataset
+#Examines relationships between survivor groups of Titanic disaster
+
+
+#Box 1 get the data
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+
+df = pd.read_csv('/kaggle/input/titanic-dataset/Titanic-Dataset.csv')
+
+
+#Box 2 peak at the data
+#df.describe()
+df.head()
+
+
+#Box 3 where is the missing data? Age, cabin, embarked
+nan_counts = df.isna().sum().values
+print(nan_counts, ' out of a total ', len(df), ' passengers.')
+
+
+#Box 4 who was onboard?
+print('This data captures', len(df), 'people out of 2240 onboard the Titanic.\n')
+
+#df['Embarked'] = df['Embarked'].replace({"S": 1, "C": 2, "D": 3})
+sur_array = df['Survived'].replace({0: "Did Not Survive", 1: "Survived"}).to_numpy()
+class_array = df['Pclass'].replace({1: "First Class", 2: "Second Class", 3: "Third Class"}).to_numpy()
+gender_array = df['Sex'].to_numpy()
+orgin_array = df['Embarked'].replace({'S': "Southampton", 'C': "Cherbourg", 'Q': "Queenstown"}).to_numpy()
+fare_array = df['Fare'].to_numpy()
+fare_array = np.sort(fare_array)
+rels_array = (df['SibSp'] + df['Parch']).to_numpy()
+rels_array = np.sort(rels_array)
+
+fig, axes = plt.subplots(2, 3, figsize=(12, 8))
+def plot_pie(ax, data, title):
+    labels, counts = zip(*pd.Series(data).value_counts().items())
+    ax.pie(counts, labels=labels, autopct='%1.1f%%', startangle=90)
+    ax.set_title(title)
+def plot_bar(ax, data, title):
+    ax.bar(range(len(data)), data, color='skyblue')
+    ax.set_title(title)
+
+plot_pie(axes[0, 0], sur_array, "Survival Distribution")
+plot_pie(axes[0, 1], class_array, "Passenger Class Distribution")
+plot_pie(axes[0, 2], gender_array, "Gender Distribution")
+plot_pie(axes[1, 0], orgin_array, "Embarkation Port Distribution")
+plot_bar(axes[1, 1], fare_array, "Fare Prices")
+plot_bar(axes[1, 2], rels_array, "Relatives Onboard")
+
+plt.tight_layout()
+plt.show()
+
+
+#Box 5 gender lin effect
+#Shows being female increases odds of survival by 73.9%
+
+Y = df['Survived']
+df['Sex'] = df['Sex'].apply(lambda x: 1 if x=='female' else 0)
+X_sm = sm.add_constant(df['Sex'])
+results = sm.OLS(Y,X_sm).fit()
+results.summary()
+
+
+#Box 6 passenger class lin effect
+#Shows that each lower class of passenger was 17.9% less likely to survive
+
+Y = df['Survived']
+X_sm = sm.add_constant(df['Pclass'])
+results = sm.OLS(Y,X_sm).fit()
+results.summary()
+
+
+#Box 7 fare lin effect
+#Shows that every $10 raises survival odds by 2.5%
+
+Y = df['Survived']
+X_sm = sm.add_constant(df['Fare'])
+results = sm.OLS(Y,X_sm).fit()
+results.summary()
+
+
+#Box 8 age lin effect
+#Replaced NaN with average value. Every year older decreased odds by .3%. High P value, so little effect.
+
+Y = df['Survived']
+df['Age'].fillna(df['Age'].mean(), inplace=True)
+X_sm = sm.add_constant(df['Age'])
+results = sm.OLS(Y,X_sm).fit()
+results.summary()
+
+
+#Box 9 relatives onboard lin effect
+#Used flag variable. Having family onboared lowered survival odds by 18.3%, significant
+
+Y = df['Survived']
+df['tot_rels'] = df['SibSp'] + df['Parch']
+#X_sm = sm.add_constant(df['tot_rels'])
+df['flag_rels'] = df['tot_rels'].apply(lambda x: 1 if x == 0 else 0)
+X_sm = sm.add_constant(df['flag_rels'])
+results = sm.OLS(Y,X_sm).fit()
+results.summary()
+
+
+#Box 10: location of embarkation log reg
+#Accuracy is near random, so no real insights can be gotten
+
+df['Embarked_num'] = df['Embarked'].apply(lambda x: 1 if x == 'C' else (2 if x == 'S' else 3))
+X = df[['Embarked_num']]
+Y = df['Survived']
+
+model = LogisticRegression()
+model.fit(X, Y)
+
+print("Intercept (b0) =", model.intercept_)
+print("Coefficient (b1) =", model.coef_)
+print("Accuracy =", model.score(X, Y))
+
+
+#Box 11: log reg of most indicative values
+#Model accuracy is high. Gender is heavily important, class is also important.
+
+X = df[['Sex', 'Fare', 'tot_rels', 'Pclass']]
+Y = df['Survived']
+
+model = LogisticRegression()
+model.fit(X, Y)
+
+print("Intercept (b0) =", model.intercept_)
+print("Coefficient (b1) =", model.coef_)
+print("Accuracy =", model.score(X, Y))
+
+coefficients = {"Sex": 2.6701,"Fare": 0.0037,"tot_rels": -0.1729,"Pclass": -0.8091}
+
+percent_changes = {var: (np.exp(b) - 1) * 100 for var, b in coefficients.items()}
+for var, pct in percent_changes.items():
+    print(f"{var}: {pct:.2f}% change in odds")
+
+
+#Box 12: Graphs variables by effect on survival. Gender removed due to outlier.
+
+variables = ['Fare ($10)', 'Total Relatives', 'Passenger Class']
+percent_values = [3.71, -15.88, -55.47]
+
+plt.figure(figsize=(8, 5))
+sns.barplot(x=percent_values, y=variables, palette="coolwarm", orient="h")
+plt.axvline(0, color='black', linestyle='--', linewidth=1)
+plt.xlabel("Percent Change in Odds of Survival")
+plt.ylabel("Variable")
+plt.title("Impact of Variables on Titanic Survival Odds")
+plt.grid(axis="x", linestyle="--", alpha=0.5)
+plt.show()
