@@ -1,0 +1,81 @@
+#Semi-Finite Difference Computation of a 1D Acoustic Wave Using RK4
+#Alex Newhall - 9/26/25
+#MECH 568 Assignment 2
+#This program simulates and plots the time evolution of pressure of a 1D acoustic wave propagating through a pipe using a semi-discrete finite difference method integrated with a fourth-order Runge–Kutta time-stepping scheme
+
+#Libraries
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+#Variable Definitions
+L = 100             #Length of pipe
+c = 1125            #Speed of sound
+t_max = 0.05        #Total sim time
+dt = 0.001          #Time step
+Nx = 21             #Total spatial points
+Nx_int = Nx - 2     #Number of interior nodes
+P_init = 850        #Initial pressure
+P_L = 0             #Left side
+P_R = 850           #Right side
+
+dx = L / (Nx - 1)       #Discretization
+beta = c**2 / dx**2     #Constant coef.
+
+#Create matrix A
+A_int = np.diag([-2 * beta] * Nx_int) + np.diag([beta] * (Nx_int - 1), 1) + np.diag([beta] * (Nx_int - 1), -1)
+
+#Create coef. matrix
+ZERO = np.zeros((Nx_int, Nx_int))
+IDENTITY = np.eye(Nx_int)
+B = np.block([[ZERO, IDENTITY], [A_int, ZERO]])
+
+#Create vector f
+g_BC = np.zeros(Nx_int)
+g_BC[0] = beta * P_L
+g_BC[-1] = beta * P_R
+f = np.zeros(2 * Nx_int)
+f[Nx_int:] = -g_BC
+
+#Create initial state vector
+P_init = np.ones(Nx_int) * P_init
+V_init = np.zeros(Nx_int)
+u_current = np.concatenate([P_init, V_init])
+
+#create history matrix
+Nt = round(t_max / dt)
+t_steps = np.linspace(0, t_max, Nt + 1)
+P_history = np.zeros((Nx, Nt + 1))
+P_history[1:Nx-1, 0] = P_init
+P_history[0, :] = P_L
+P_history[-1, :] = P_R
+
+#Time stepping loop to build matrix
+for n in range(Nt):
+    u_n = u_current
+    F1 = B @ u_n - f
+    k1 = dt * F1
+    F2 = B @ (u_n + 0.5 * k1) - f
+    k2 = dt * F2
+    F3 = B @ (u_n + 0.5 * k2) - f
+    k3 = dt * F3
+    F4 = B @ (u_n + k3) - f
+    k4 = dt * F4
+    u_next = u_n + (1/6) * (k1 + 2*k2 + 2*k3 + k4)
+    u_current = u_next
+    P_history[1:Nx-1, n+1] = u_current[:Nx_int]
+
+#Plot results
+x = np.linspace(0, L, Nx)
+T_grid, X_grid = np.meshgrid(t_steps, x)
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+surf = ax.plot_surface(X_grid, T_grid, P_history, cmap='viridis', edgecolor='none')
+
+ax.set_xlabel('Distance (ft)')
+ax.set_ylabel('Time (s)')
+ax.set_zlabel('Pressure (psi)')
+ax.set_title('Solution of 1-D Wave Equation (RK4 Semi-Discrete)')
+fig.colorbar(surf, shrink=0.5, aspect=5, label='Pressure (psi)')
+
+plt.show()
